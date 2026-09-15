@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Utensils, AlertTriangle, CheckCircle, ShoppingBag, X, User, LogOut, Plus, Minus, Trash2, ChefHat } from 'lucide-react';
 
 // Render production 백엔드 URL
-const API_BASE_URL = 'https://single-table-server.onrender.com';
+const API_BASE_URL = 'https://single-table.onrender.com';
 
 function App() {
   const [tools, setTools] = useState([]);

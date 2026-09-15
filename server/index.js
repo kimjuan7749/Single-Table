@@ -11,7 +11,10 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: '*', // 모든 도메인에서의 요청 허용
+  credentials: true
+}));
 app.use(express.json());
 
 // JWT 인증 미들웨어

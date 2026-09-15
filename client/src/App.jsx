@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Utensils, AlertTriangle, CheckCircle, ShoppingBag, X, User, LogOut, Plus, Minus, Trash2, ChefHat } from 'lucide-react';
 
+// Render production 백엔드 URL
+const API_BASE_URL = 'https://single-table-server.onrender.com';
+
 function App() {
   const [tools, setTools] = useState([]);
   const [products, setProducts] = useState([]);
@@ -37,7 +40,7 @@ function App() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await axios.get('http://localhost:5000/api/auth/me', {
+      const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data.success) setUser(res.data.data);
@@ -48,26 +51,38 @@ function App() {
   };
 
   const fetchTools = async () => {
-    const res = await axios.get('http://localhost:5000/api/tools');
-    if (res.data.success) setTools(res.data.data);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/tools`);
+      if (res.data.success) setTools(res.data.data);
+    } catch (err) {
+      console.error('조리 기구 로드 오류:', err);
+    }
   };
 
   const fetchProducts = async () => {
-    const res = await axios.get('http://localhost:5000/api/products');
-    if (res.data.success) {
-      setProducts(res.data.data.map((p) => ({ ...p, isCookable: true })));
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/products`);
+      if (res.data.success) {
+        setProducts(res.data.data.map((p) => ({ ...p, isCookable: true })));
+      }
+    } catch (err) {
+      console.error('상품 목록 로드 오류:', err);
     }
   };
 
   const fetchFilteredProducts = async () => {
-    const toolIds = selectedTools.join(',');
-    const res = await axios.get(`http://localhost:5000/api/products/filter?tools=${toolIds}`);
-    if (res.data.success) setProducts(res.data.data);
+    try {
+      const toolIds = selectedTools.join(',');
+      const res = await axios.get(`${API_BASE_URL}/api/products/filter?tools=${toolIds}`);
+      if (res.data.success) setProducts(res.data.data);
+    } catch (err) {
+      console.error('필터링 로드 오류:', err);
+    }
   };
 
   const fetchRecipes = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/recipes');
+      const res = await axios.get(`${API_BASE_URL}/api/recipes`);
       if (res.data.success) setRecipes(res.data.data);
     } catch (err) {
       console.error('레시피 로드 오류:', err);
@@ -75,44 +90,52 @@ function App() {
   };
 
   const fetchCart = async () => {
-    const res = await axios.get('http://localhost:5000/api/cart');
-    if (res.data.success) setCartItems(res.data.data);
-  };
-
-  const addToCart = async (productId) => {
-    const res = await axios.post('http://localhost:5000/api/cart', { productId, quantity: 1 });
-    if (res.data.success) {
-      fetchCart();
-      setIsCartOpen(true);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/cart`);
+      if (res.data.success) setCartItems(res.data.data);
+    } catch (err) {
+      console.error('장바구니 로드 오류:', err);
     }
   };
 
-  // 1. 수량 변경 연동 (PATCH)
+  const addToCart = async (productId) => {
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/cart`, { productId, quantity: 1 });
+      if (res.data.success) {
+        fetchCart();
+        setIsCartOpen(true);
+      }
+    } catch (err) {
+      console.error('장바구니 담기 오류:', err);
+    }
+  };
+
+  // 수량 조절 API 연동 (PATCH)
   const updateQuantity = async (cartId, currentQuantity, change) => {
     const newQuantity = currentQuantity + change;
     if (newQuantity < 1) return;
     try {
-      const res = await axios.patch(`http://localhost:5000/api/cart/${cartId}`, { quantity: newQuantity });
+      const res = await axios.patch(`${API_BASE_URL}/api/cart/${cartId}`, { quantity: newQuantity });
       if (res.data.success) fetchCart();
     } catch (err) {
       console.error('수량 변경 에러:', err);
     }
   };
 
-  // 2. 장바구니 항목 삭제 연동 (DELETE)
+  // 삭제 API 연동 (DELETE)
   const removeCartItem = async (cartId) => {
     try {
-      const res = await axios.delete(`http://localhost:5000/api/cart/${cartId}`);
+      const res = await axios.delete(`${API_BASE_URL}/api/cart/${cartId}`);
       if (res.data.success) fetchCart();
     } catch (err) {
       console.error('삭제 에러:', err);
     }
   };
 
-  // 3. 레시피 원클릭 장바구니 담기 연동 (POST)
+  // 레시피 원클릭 장바구니 담기 연동 (POST)
   const addRecipeToCart = async (recipeId) => {
     try {
-      const res = await axios.post('http://localhost:5000/api/cart/recipe', { recipeId });
+      const res = await axios.post(`${API_BASE_URL}/api/cart/recipe`, { recipeId });
       if (res.data.success) {
         fetchCart();
         setIsCartOpen(true);
@@ -133,7 +156,7 @@ function App() {
     setAuthError('');
     const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
     try {
-      const res = await axios.post(`http://localhost:5000${endpoint}`, formData);
+      const res = await axios.post(`${API_BASE_URL}${endpoint}`, formData);
       if (res.data.success) {
         if (authMode === 'login') {
           localStorage.setItem('token', res.data.token);
@@ -312,7 +335,7 @@ function App() {
         </section>
       </main>
 
-      {/* 장바구니 슬라이드 패널 (수량 변경 & 삭제 버튼 반영) */}
+      {/* 장바구니 패널 */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col p-6 justify-between">
@@ -336,7 +359,6 @@ function App() {
                           {item.product.price.toLocaleString()}원
                         </p>
 
-                        {/* 수량 조절 버튼 (+ / -) */}
                         <div className="flex items-center gap-2 mt-2">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity, -1)}
@@ -355,7 +377,6 @@ function App() {
                       </div>
 
                       <div className="flex flex-col items-end gap-2">
-                        {/* 항목 삭제 버튼 */}
                         <button
                           onClick={() => removeCartItem(item.id)}
                           className="text-gray-400 hover:text-red-500 transition-colors"

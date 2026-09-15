@@ -12,7 +12,7 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: '*', // 모든 도메인에서의 요청 허용
+  origin: true, // 요청을 보낸 프론트엔드 출처(Vercel 등)를 모두 허용
   credentials: true
 }));
 app.use(express.json());

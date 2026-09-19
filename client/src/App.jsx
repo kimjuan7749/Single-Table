@@ -177,6 +177,37 @@ function App() {
     localStorage.removeItem('token');
     setUser(null);
   };
+  // App.jsx 내 함수 추가
+  const handlePayment = () => {
+    if (cartItems.length === 0) return;
+
+    // 토스페이먼츠 테스트 클라이언트 키 (토스 개발자센터의 테스트 키 사용)
+    const clientKey = 'test_ck_D5GeA3x50wE1q0136513bL7N00N5'; 
+    const tossPayments = window.TossPayments(clientKey);
+
+    // 대표 상품명 생성 (예: "1인분 부대찌개 밀키트 외 1건")
+    const orderTitle = cartItems.length === 1 
+      ? cartItems[0].product.name 
+      : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
+
+    // 고유 주문번호 생성
+    const orderId = `ORDER_${Date.now()}`;
+
+    tossPayments.requestPayment('카드', {
+      amount: totalPrice,
+      orderId: orderId,
+      orderName: orderTitle,
+      customerName: user ? user.name : '구매자',
+      successUrl: `${window.location.origin}/payment/success`,
+      failUrl: `${window.location.origin}/payment/fail`,
+    }).catch((error) => {
+      if (error.code === 'USER_CANCEL') {
+        alert('결제가 취소되었습니다.');
+      } else {
+        alert(`결제 오류: ${error.message}`);
+      }
+    });
+  };
 
   const totalPrice = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
@@ -399,10 +430,11 @@ function App() {
                 <span className="text-xl font-extrabold text-gray-900">{totalPrice.toLocaleString()}원</span>
               </div>
               <button
+                onClick={handlePayment}
                 disabled={cartItems.length === 0}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition-colors"
               >
-                주문하기
+                {totalPrice.toLocaleString()}원 주문하기
               </button>
             </div>
           </div>

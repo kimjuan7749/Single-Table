@@ -302,6 +302,45 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
+// server/index.js 에 추가
+
+// 토스페이먼츠 결제 승인 API
+app.post('/api/payments/confirm', async (req, res) => {
+  const { paymentKey, orderId, amount } = req.body;
+
+  try {
+    // 토스페이먼츠 승인 API 호출 (Secret Key를 Base64 인코딩)
+    const widgetSecretKey = process.env.TOSS_SECRET_KEY || 'test_sk_zXLk5nO1vpE1021d6612pN4E2551';
+    const encryptedSecretKey = Buffer.from(`${widgetSecretKey}:`).toString('base64');
+
+    const response = await axios.post(
+      'https://api.tosspayments.com/v1/payments/confirm',
+      { paymentKey, orderId, amount },
+      {
+        headers: {
+          Authorization: `Basic ${encryptedSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // 결제 성공 시 장바구니 비우기
+    await prisma.cart.deleteMany({});
+
+    return res.status(200).json({
+      success: true,
+      message: '결제가 성공적으로 승인되었습니다.',
+      data: response.data,
+    });
+  } catch (error) {
+    console.error('토스 결제 승인 에러:', error.response?.data || error.message);
+    return res.status(500).json({
+      success: false,
+      message: error.response?.data?.message || '결제 승인 실패',
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Single Table 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
 });

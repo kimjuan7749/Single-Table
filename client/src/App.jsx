@@ -179,42 +179,42 @@ function App() {
   };
   // App.jsx 내 함수 추가
   const handlePayment = () => {
-  if (cartItems.length === 0) return;
+    if (cartItems.length === 0) return;
 
-  // 토스페이먼츠 공식 테스트 클라이언트 키
-  const clientKey = 'test_ck_D5GeA3x50wE1q0136513bL7N00N5'; 
-  
-  // TossPayments 객체 생성
-  if (!window.TossPayments) {
-    alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
-    return;
-  }
-
-  const tossPayments = window.TossPayments(clientKey);
-
-  // 대표 상품명 생성 (예: "1인분 부대찌개 밀키트 외 1건")
-  const orderTitle = cartItems.length === 1 
-    ? cartItems[0].product.name 
-    : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
-
-  // 고유 주문번호 생성
-  const orderId = `ORDER_${Date.now()}`;
-
-  tossPayments.requestPayment('카드', {
-    amount: totalPrice,
-    orderId: orderId,
-    orderName: orderTitle,
-    customerName: user ? user.name : '구매자',
-    successUrl: `${window.location.origin}/payment/success`,
-    failUrl: `${window.location.origin}/payment/fail`,
-  }).catch((error) => {
-    if (error.code === 'USER_CANCEL') {
-      alert('결제가 취소되었습니다.');
-    } else {
-      alert(`결제 오류: ${error.message}`);
+    // 토스페이먼츠 공식 테스트 클라이언트 키
+    const clientKey = 'test_ck_D5GeA3x50wE1q0136513bL7N00N5'; 
+    
+    // TossPayments 객체 생성
+    if (!window.TossPayments) {
+      alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+      return;
     }
-  });
-};
+
+    const tossPayments = window.TossPayments(clientKey);
+
+    // 대표 상품명 생성 (예: "1인분 부대찌개 밀키트 외 1건")
+    const orderTitle = cartItems.length === 1 
+      ? cartItems[0].product.name 
+      : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
+
+    // 고유 주문번호 생성
+    const orderId = `ORDER_${Date.now()}`;
+
+    tossPayments.requestPayment('카드', {
+      amount: totalPrice,
+      orderId: orderId,
+      orderName: orderTitle,
+      customerName: user ? user.name : '구매자',
+      successUrl: `${window.location.origin}/payment/success`,
+      failUrl: `${window.location.origin}/payment/fail`,
+    }).catch((error) => {
+      if (error.code === 'USER_CANCEL') {
+        alert('결제가 취소되었습니다.');
+      } else {
+        alert(`결제 오류: ${error.message}`);
+      }
+    });
+  };
 
   const totalPrice = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 

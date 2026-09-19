@@ -19,6 +19,8 @@ function App() {
   const [authMode, setAuthMode] = useState('login');
   const [formData, setFormData] = useState({ email: '', password: '', name: '' });
   const [authError, setAuthError] = useState('');
+  
+  const [cookingTools, setCookingTools] = useState([]);
 
   useEffect(() => {
     fetchTools();
@@ -36,22 +38,101 @@ function App() {
     }
   }, [selectedTools]);
 
-  // 1. 페이지 로드 시 로그인 상태 체크 및 보유 기구 DB 조회
+  // 1. 초기 데이터 불러오기 및 로그인 상태 체크
   useEffect(() => {
-    const initApp = async () => {
-      // 상품 및 조리기구 기본 데이터 가져오기
-      await fetchProductsAndTools();
-
-      // 토큰이 존재하면 로그인 상태 및 사용자의 DB 저장 보유 기구 불러오기
+    const init = async () => {
+      await fetchInitialData();
+      
       const token = localStorage.getItem('token');
       if (token) {
         await checkLoginStatus(token);
       }
     };
-
-    initApp();
+    init();
   }, []);
   
+  // 기본 상품/기구/레시피 로드
+  const fetchInitialData = async () => {
+    try {
+      const [prodRes, toolRes, recipeRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/products`),
+        axios.get(`${API_BASE_URL}/api/tools`),
+        axios.get(`${API_BASE_URL}/api/recipes`).catch(() => ({ data: { success: false } })),
+      ]);
+
+      if (prodRes.data.success) setProducts(prodRes.data.data);
+      if (toolRes.data.success) setCookingTools(toolRes.data.data);
+      if (recipeRes.data && recipeRes.data.success) setRecipes(recipeRes.data.data);
+    } catch (err) {
+      console.error('기본 데이터 로드 실패:', err);
+    }
+  };
+
+  // 로그인 상태 확인 & DB 저장된 사용자의 보유 기구 불러오기
+  const checkLoginStatus = async (authToken) => {
+    try {
+      const token = authToken || localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data.success) {
+        setUser(res.data.data);
+        // DB에서 사용자 보유 기구 목록 조회
+        fetchUserTools(token);
+      }
+    } catch (err) {
+      console.error('로그인 세션 만료:', err);
+      localStorage.removeItem('token');
+      setUser(null);
+    }
+  };
+
+  // DB 사용자 보유 기구 조회
+  const fetchUserTools = async (token) => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/user/tools`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setSelectedTools(res.data.data);
+      }
+    } catch (err) {
+      console.error('보유 기구 조회 실패:', err);
+    }
+  };
+
+  // 조리 기구 클릭 토글 및 DB 동기화
+  const toggleTool = async (toolId) => {
+    const token = localStorage.getItem('token');
+
+    // UI 상태 즉시 반영
+    const isSelected = selectedTools.includes(toolId);
+    const nextTools = isSelected
+      ? selectedTools.filter((id) => id !== toolId)
+      : [...selectedTools, toolId];
+
+    setSelectedTools(nextTools);
+
+    // 로그인된 사용자는 DB에 저장/삭제 요청
+    if (token) {
+      try {
+        const res = await axios.post(
+          `${API_BASE_URL}/api/user/tools/toggle`,
+          { toolId },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.data.success) {
+          // 실패 시 원복
+          setSelectedTools(selectedTools);
+        }
+      } catch (err) {
+        console.error('보유 기구 DB 저장 에러:', err);
+      }
+    }
+  };
 
   const fetchTools = async () => {
     try {
@@ -220,76 +301,6 @@ function App() {
     } catch (err) {
       console.error('TossPayments 초기화 오류:', err);
       alert('결제 창을 불러오는 중 오류가 발생했습니다.');
-    }
-  };
-  // 로그인 사용자 정보 및 보유 기구 목록 조회
-  const checkLoginStatus = async (token) => {
-    const authToken = token || localStorage.getItem('token');
-    if (!authToken) return;
-
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      if (res.data.success) {
-        setUser(res.data.data);
-        // 로그인 성공 시 사용자의 DB 저장 보유 기구 목록 로드
-        await fetchUserTools(authToken);
-      }
-    } catch (err) {
-      console.error('로그인 세션 만료:', err);
-      localStorage.removeItem('token');
-      setUser(null);
-    }
-  };
-
-  // DB 보유 기구 목록 조회 함수
-  const fetchUserTools = async (authToken) => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/user/tools`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      if (res.data.success && Array.isArray(res.data.data)) {
-        // DB에 저장되어 있던 조리 기구 ID 배열로 state 업데이트
-        setSelectedTools(res.data.data);
-      }
-    } catch (err) {
-      console.error('사용자 보유 기구 불러오기 실패:', err);
-    }
-  };
-
-  // 조리 기구 클릭 시 DB 토글 sync 처리
-  const toggleTool = async (toolId) => {
-    const token = localStorage.getItem('token');
-
-    // UI 즉시 업데이트 (낙관적 업데이트)
-    const isSelected = selectedTools.includes(toolId);
-    const nextTools = isSelected
-      ? selectedTools.filter((id) => id !== toolId)
-      : [...selectedTools, toolId];
-
-    setSelectedTools(nextTools);
-
-    // 로그인 상태인 경우 DB 서버에 저장
-    if (token) {
-      try {
-        const res = await axios.post(
-          `${API_BASE_URL}/api/user/tools/toggle`,
-          { toolId },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (!res.data.success) {
-          // 실패 시 원래 상태로 복구
-          setSelectedTools(selectedTools);
-        }
-      } catch (err) {
-        console.error('보유 기구 DB 저장 실패:', err);
-        // 에러 발생 시 원래 상태로 복구
-        setSelectedTools(selectedTools);
-      }
     }
   };
   

@@ -103,6 +103,37 @@ function App() {
       console.error('보유 기구 조회 실패:', err);
     }
   };
+  
+  // 로그인 성공 처리 함수
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+        email,
+        password,
+      });
+
+      if (res.data.success) {
+        const token = res.data.token;
+        
+        // 1. 토큰 저장 및 유저 상태 업데이트
+        localStorage.setItem('token', token);
+        setUser(res.data.user);
+        
+        // 2. ⭐️ [핵심] 재로그인 시 DB에 저장된 보유 조리 기구 목록 로드
+        await fetchUserTools(token);
+
+        // 모달 닫기 및 입력 폼 초기화
+        setIsLoginOpen(false);
+        setEmail('');
+        setPassword('');
+        alert('로그인되었습니다.');
+      }
+    } catch (err) {
+      console.error('로그인 실패:', err);
+      alert('로그인 정보가 올바르지 않습니다.');
+    }
+  };
 
   // 조리 기구 클릭 토글 및 DB 동기화
   const toggleTool = async (toolId) => {
@@ -308,9 +339,10 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
-    setSelectedTools([]);
+    setSelectedTools([]); // 보유 기구 선택 상태 초기화
+    alert('로그아웃되었습니다.');
   };
-
+  
   const totalPrice = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
   return (

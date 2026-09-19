@@ -14,25 +14,26 @@ model User {
   password  String
   name      String
   createdAt DateTime   @default(now())
-  userTools UserTool[]
-  carts     Cart[]
+  userTools UserTool[] // 추가
 }
 
 // 2. 조리 기구 정보
 model CookingTool {
   id           Int           @id @default(autoincrement())
   name         String        @unique
-  userTools    UserTool[]
   productTools ProductTool[]
+  userTools    UserTool[]    // 추가
 }
 
-// 3. 회원 보유 조리 기구 매핑
+// 사용자 보유 기구 다대다 교차 테이블 (추가)
 model UserTool {
   id            Int         @id @default(autoincrement())
   userId        Int
   cookingToolId Int
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   cookingTool   CookingTool @relation(fields: [cookingToolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cookingToolId])
 }
 
 // 4. 소용량 상품 정보

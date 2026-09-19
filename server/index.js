@@ -29,10 +29,9 @@ app.use(express.json());
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  
   if (!token) return res.status(401).json({ success: false, message: '인증 토큰이 없습니다.' });
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'singletable_secret_key_2026', (err, user) => {
     if (err) return res.status(403).json({ success: false, message: '유효하지 않은 토큰입니다.' });
     req.user = user;
     next();
@@ -337,6 +336,60 @@ app.post('/api/payments/confirm', async (req, res) => {
       success: true,
       message: '시뮬레이션 결제 승인 완료',
     });
+  }
+});
+
+
+
+// 1. 로그인한 사용자의 보유 조리 기구 ID 목록 조회 (GET)
+app.get('/api/user/tools', authenticateToken, async (req, res) => {
+  try {
+    const userTools = await prisma.userTool.findMany({
+      where: { userId: req.user.id },
+      select: { cookingToolId: true },
+    });
+    const toolIds = userTools.map((ut) => ut.cookingToolId);
+    res.json({ success: true, data: toolIds });
+  } catch (error) {
+    console.error('사용자 기구 조회 오류:', error);
+    res.status(500).json({ success: false, message: '조회 실패' });
+  }
+});
+
+// 2. 사용자 보유 조리 기구 추가/삭제 토글 (POST)
+app.post('/api/user/tools/toggle', authenticateToken, async (req, res) => {
+  const { toolId } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const existing = await prisma.userTool.findUnique({
+      where: {
+        userId_cookingToolId: {
+          userId: userId,
+          cookingToolId: Number(toolId),
+        },
+      },
+    });
+
+    if (existing) {
+      // 이미 등록되어 있으면 제거
+      await prisma.userTool.delete({
+        where: { id: existing.id },
+      });
+      res.json({ success: true, action: 'removed', toolId });
+    } else {
+      // 없으면 신규 저장
+      await prisma.userTool.create({
+        data: {
+          userId: userId,
+          cookingToolId: Number(toolId),
+        },
+      });
+      res.json({ success: true, action: 'added', toolId });
+    }
+  } catch (error) {
+    console.error('사용자 기구 토글 오류:', error);
+    res.status(500).json({ success: false, message: '저장 실패' });
   }
 });
 

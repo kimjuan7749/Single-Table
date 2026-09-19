@@ -36,19 +36,7 @@ function App() {
     }
   }, [selectedTools]);
 
-  const checkLoginStatus = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.data.success) setUser(res.data.data);
-    } catch (err) {
-      localStorage.removeItem('token');
-      setUser(null);
-    }
-  };
+  
 
   const fetchTools = async () => {
     try {
@@ -145,12 +133,6 @@ function App() {
     }
   };
 
-  const toggleTool = (toolId) => {
-    setSelectedTools((prev) =>
-      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]
-    );
-  };
-
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -173,10 +155,7 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-  };
+  
   // App.jsx 내 함수 추가
   const handlePayment = () => {
     if (cartItems.length === 0) {
@@ -227,6 +206,71 @@ function App() {
       console.error('TossPayments 초기화 오류:', err);
       alert('결제 창을 불러오는 중 오류가 발생했습니다.');
     }
+  };
+  // 로그인 시 DB에서 사용자의 보유 기구 목록 불러오기
+  const checkLoginStatus = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success) {
+        setUser(res.data.data);
+        // 로그인 사용자 보유 기구 DB 조회
+        fetchUserTools(token);
+      }
+    } catch (err) {
+      localStorage.removeItem('token');
+      setUser(null);
+    }
+  };
+
+  // DB 보유 기구 목록 조회 함수
+  const fetchUserTools = async (token) => {
+    try {
+      const authToken = token || localStorage.getItem('token');
+      if (!authToken) return;
+
+      const res = await axios.get(`${API_BASE_URL}/api/user/tools`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.data.success) {
+        setSelectedTools(res.data.data);
+      }
+    } catch (err) {
+      console.error('사용자 보유 기구 불러오기 실패:', err);
+    }
+  };
+
+  // 기구 클릭 시 DB 토글 처리
+  const toggleTool = async (toolId) => {
+    const token = localStorage.getItem('token');
+
+    // 화면 UI 즉시 반영 (낙관적 업데이트)
+    setSelectedTools((prev) =>
+      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]
+    );
+
+    // 로그인 상태인 경우 DB에 동기화 저장
+    if (token) {
+      try {
+        await axios.post(
+          `${API_BASE_URL}/api/user/tools/toggle`,
+          { toolId },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } catch (err) {
+        console.error('보유 기구 DB 저장 에러:', err);
+      }
+    }
+  };
+
+  // 로그아웃 시 보유 기구 선택 해제
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    setSelectedTools([]);
   };
 
   const totalPrice = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);

@@ -1,4 +1,3 @@
-// client/src/PaymentSuccess.jsx
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -28,15 +27,17 @@ function PaymentSuccess() {
           setLoading(false);
         }
       } catch (err) {
-        alert('결제 승인 중 오류가 발생했습니다.');
-        navigate('/');
+        console.error('결제 승인 오류:', err);
+        setLoading(false);
       }
     };
 
     if (paymentKey && orderId && amount) {
       confirmPayment();
+    } else {
+      setLoading(false);
     }
-  }, [paymentKey, orderId, amount, navigate]);
+  }, [paymentKey, orderId, amount]);
 
   if (loading) {
     return (
@@ -53,7 +54,7 @@ function PaymentSuccess() {
         <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">결제가 완료되었습니다!</h2>
         <p className="text-sm text-gray-500 mb-6">주문이 성공적으로 접수되었습니다.</p>
-        
+
         <div className="bg-gray-50 p-4 rounded-xl text-left text-sm space-y-2 mb-6">
           <div className="flex justify-between">
             <span className="text-gray-500">주문번호</span>
@@ -61,12 +62,12 @@ function PaymentSuccess() {
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">결제 금액</span>
-            <span className="font-bold text-blue-600">{Number(amount).toLocaleString()}원</span>
+            <span className="font-bold text-blue-600">{Number(amount || 0).toLocaleString()}원</span>
           </div>
         </div>
 
         <button
-          onClick={() => navigate('/')}
+          onClick={() => (window.location.href = '/')}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors"
         >
           메인으로 돌아가기

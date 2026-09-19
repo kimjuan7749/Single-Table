@@ -179,45 +179,54 @@ function App() {
   };
   // App.jsx 내 함수 추가
   const handlePayment = () => {
-    if (cartItems.length === 0) return;
-
-    // 토스페이먼츠 공식 테스트 클라이언트 키
-    const clientKey = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
-
-    if (!window.TossPayments) {
-      alert('토스페이먼츠 SDK 로딩 중입니다. 잠시 후 다시 시도해 주세요.');
+    if (cartItems.length === 0) {
+      alert('장바구니가 비어 있습니다.');
       return;
     }
 
-    // TossPayments 초기화
-    const tossPayments = window.TossPayments(clientKey);
+    // 발급받으신 토스페이먼츠 테스트 클라이언트 키 입력
+    const clientKey = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
 
-    // 주문명 생성 (예: "1인분 부대찌개 밀키트 외 1건")
-    const orderTitle =
-      cartItems.length === 1
-        ? cartItems[0].product.name
-        : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
+    if (!window.TossPayments) {
+      alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
 
-    // 고유 주문번호 (영문, 숫자, 특수문자 -, _ 만 허용)
-    const orderId = `ORDER_${Date.now()}`;
+    try {
+      const tossPayments = window.TossPayments(clientKey);
 
-    // 토스 결제창 호출
-    tossPayments
-      .requestPayment('카드', {
-        amount: totalPrice,
+      // 대표 상품명 생성 (특수문자 제거 및 100자 이하 처리)
+      const orderTitle =
+        cartItems.length === 1
+          ? cartItems[0].product.name
+          : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
+
+      // 고유 주문번호 생성 (영문, 숫자, -, _ 만 사용하여 6자 이상)
+      const orderId = `ORDER_${Date.now()}`;
+
+      // 결제 금액 (숫자 타입)
+      const amount = Number(totalPrice);
+
+      // 토스페이먼츠 결제창 호출
+      tossPayments.requestPayment('카드', {
+        amount: amount,
         orderId: orderId,
         orderName: orderTitle,
-        customerName: user ? user.name : '구매자',
+        customerName: user && user.name ? user.name : '구매자',
         successUrl: `${window.location.origin}/payment/success`,
         failUrl: `${window.location.origin}/payment/fail`,
-      })
-      .catch((error) => {
+      }).catch((error) => {
         if (error.code === 'USER_CANCEL') {
           alert('결제가 취소되었습니다.');
         } else {
-          alert(`결제 오류: ${error.message}`);
+          console.error('토스 결제 오류 상세:', error);
+          alert(`결제 오류: ${error.message || '처리 중 오류가 발생했습니다.'}`);
         }
       });
+    } catch (err) {
+      console.error('TossPayments 초기화 오류:', err);
+      alert('결제 창을 불러오는 중 오류가 발생했습니다.');
+    }
   };
 
   const totalPrice = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);

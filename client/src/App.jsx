@@ -185,7 +185,7 @@ function App() {
     }
 
     // 발급받으신 토스페이먼츠 테스트 클라이언트 키 입력
-    const clientKey = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
+    const clientKey = 'test_ck_PBal2vxj81yAz2PaDK9185RQgOAN';
 
     if (!window.TossPayments) {
       alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');

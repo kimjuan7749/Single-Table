@@ -25,22 +25,92 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json());
 
-// JWT 인증 미들웨어
+// 1. 기본 서버 상태 확인
+app.get('/', (req, res) => {
+  res.send('🍳 Single Table Express Server is Running!');
+});
+
+
+// JWT 인증 미들웨어 (req.user에 id가 고정으로 들어가도록 보장)
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ success: false, message: '인증 토큰이 없습니다.' });
 
-  jwt.verify(token, process.env.JWT_SECRET || 'singletable_secret_key_2026', (err, user) => {
-    if (err) return res.status(403).json({ success: false, message: '유효하지 않은 토큰입니다.' });
-    req.user = user;
+  if (!token) {
+    return res.status(401).json({ success: false, message: '인증 토큰이 없습니다.' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'singletable_secret_key_2026', (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ success: false, message: '유효하지 않은 토큰입니다.' });
+    }
+    // 토큰 payload의 id 또는 userId 값을 추출
+    const userId = decoded.id || decoded.userId;
+    req.user = { id: Number(userId) };
     next();
   });
 };
 
-// 1. 기본 서버 상태 확인
-app.get('/', (req, res) => {
-  res.send('🍳 Single Table Express Server is Running!');
+// 1. 로그인 사용자 보유 조리 기구 ID 목록 조회 (GET)
+app.get('/api/user/tools', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: '사용자 ID를 찾을 수 없습니다.' });
+    }
+
+    const userTools = await prisma.userTool.findMany({
+      where: { userId: userId },
+      select: { cookingToolId: true },
+    });
+
+    const toolIds = userTools.map((ut) => ut.cookingToolId);
+    res.json({ success: true, data: toolIds });
+  } catch (error) {
+    console.error('사용자 기구 조회 오류:', error);
+    res.status(500).json({ success: false, message: '조회 실패' });
+  }
+});
+
+// 2. 사용자 보유 조리 기구 추가/삭제 토글 (POST)
+app.post('/api/user/tools/toggle', authenticateToken, async (req, res) => {
+  const { toolId } = req.body;
+  const userId = req.user.id;
+
+  if (!userId || !toolId) {
+    return res.status(400).json({ success: false, message: '필수 파라미터가 누락되었습니다.' });
+  }
+
+  try {
+    const existing = await prisma.userTool.findUnique({
+      where: {
+        userId_cookingToolId: {
+          userId: Number(userId),
+          cookingToolId: Number(toolId),
+        },
+      },
+    });
+
+    if (existing) {
+      // 이미 저장되어 있으면 삭제
+      await prisma.userTool.delete({
+        where: { id: existing.id },
+      });
+      res.json({ success: true, action: 'removed', toolId: Number(toolId) });
+    } else {
+      // 없으면 신규 생성
+      await prisma.userTool.create({
+        data: {
+          userId: Number(userId),
+          cookingToolId: Number(toolId),
+        },
+      });
+      res.json({ success: true, action: 'added', toolId: Number(toolId) });
+    }
+  } catch (error) {
+    console.error('사용자 기구 토글 오류:', error);
+    res.status(500).json({ success: false, message: '저장 실패' });
+  }
 });
 
 // 2. 전체 조리 기구 목록 조회

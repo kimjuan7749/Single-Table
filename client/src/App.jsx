@@ -182,7 +182,7 @@ function App() {
     if (cartItems.length === 0) return;
 
     // 토스페이먼츠 공식 테스트 클라이언트 키
-    const clientKey = 'test_ck_D5GeA3x50wE1q0136513bL7N00N5';
+    const clientKey = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
 
     if (!window.TossPayments) {
       alert('토스페이먼츠 SDK 로딩 중입니다. 잠시 후 다시 시도해 주세요.');

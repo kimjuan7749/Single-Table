@@ -154,6 +154,51 @@ function App() {
 
   const totalPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
+  // 토스 결제 호출 함수
+  const handlePayment = () => {
+    if (cartItems.length === 0) {
+      alert('장바구니가 비어 있습니다.');
+      return;
+    }
+
+    const clientKey = 'test_ck_발급받으신_클라이언트_키'; // 발급받으신 토스 클라이언트 키
+
+    if (!window.TossPayments) {
+      alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+
+    try {
+      const tossPayments = window.TossPayments(clientKey);
+
+      const orderTitle =
+        cartItems.length === 1
+          ? cartItems[0].product.name
+          : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
+
+      const orderId = `ORDER_${Date.now()}`;
+
+      tossPayments
+        .requestPayment('카드', {
+          amount: totalPrice,
+          orderId: orderId,
+          orderName: orderTitle,
+          customerName: user && user.name ? user.name : '구매자',
+          successUrl: `${window.location.origin}/payment/success`,
+          failUrl: `${window.location.origin}/payment/fail`,
+        })
+        .catch((error) => {
+          if (error.code === 'USER_CANCEL') {
+            alert('결제가 취소되었습니다.');
+          } else {
+            alert(`결제 오류: ${error.message || '처리 중 오류가 발생했습니다.'}`);
+          }
+        });
+    } catch (err) {
+      console.error('TossPayments 초기화 오류:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f7f7f7] text-[#333333] font-sans">
       {/* 마켓컬리 스타일 최상단 가입/로그인 바 */}
@@ -371,6 +416,77 @@ function App() {
             >
               ✕
             </button>
+          </div>
+        </div>
+      )}
+    {/* 장바구니 슬라이드 사이드바 */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          {/* 배경 오버레이 */}
+          <div
+            className="absolute inset-0 bg-black/50 transition-opacity"
+            onClick={() => setIsCartOpen(false)}
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
+              {/* 장바구니 헤더 */}
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-[#5f0080]" />
+                  <h3 className="font-bold text-gray-900 text-lg">장바구니</h3>
+                </div>
+                <button
+                  onClick={() => setIsCartOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 장바구니 아이템 목록 */}
+              <div className="p-6 flex-1 overflow-y-auto divide-y divide-gray-100">
+                {cartItems.length === 0 ? (
+                  <div className="text-center py-20 text-gray-400 text-sm">
+                    장바구니에 담긴 상품이 없습니다.
+                  </div>
+                ) : (
+                  cartItems.map((item) => (
+                    <div key={item.product.id} className="py-4 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-sm text-gray-800 mb-1">
+                          {item.product.name}
+                        </h4>
+                        <div className="text-xs text-gray-500">
+                          {item.product.price.toLocaleString()}원 × {item.quantity}개
+                        </div>
+                      </div>
+                      <div className="font-bold text-sm text-[#5f0080]">
+                        {(item.product.price * item.quantity).toLocaleString()}원
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* 장바구니 하단 결제 버튼 */}
+              {cartItems.length > 0 && (
+                <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
+                  <div className="flex justify-between items-center text-base font-bold">
+                    <span>총 결제 금액</span>
+                    <span className="text-lg text-[#5f0080]">
+                      {totalPrice.toLocaleString()}원
+                    </span>
+                  </div>
+                  <button
+                    onClick={handlePayment}
+                    className="w-full bg-[#5f0080] hover:bg-[#4a0064] text-white font-bold py-3.5 rounded-xl transition-colors text-sm shadow-md"
+                  >
+                    {totalPrice.toLocaleString()}원 결제하기
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

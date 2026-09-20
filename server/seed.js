@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 테스트 데이터 초기화 및 생성을 시작합니다...');
 
-  // 기존 데이터 완전 초기화 (참조 관계 순서대로 삭제)
+  // 1. 기존 데이터 완전 초기화 (참조 관계 순서대로 삭제)
   await prisma.userTool.deleteMany({});
   await prisma.cart.deleteMany({});
   await prisma.recipeItem.deleteMany({});
@@ -13,20 +13,18 @@ async function main() {
   await prisma.product.deleteMany({});
   await prisma.cookingTool.deleteMany({});
 
-  // 1. 조리 기구 안전하게 생성 (upsert 사용으로 중복 방지)
+  // 2. 조리 기구 생성 및 Map 객체로 ID 저장
   const toolNames = ['1구 인덕션', '에어프라이어', '전자레인지', '오븐', '가스레인지'];
   const toolsMap = {};
 
   for (const name of toolNames) {
-    const tool = await prisma.cookingTool.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+    const tool = await prisma.cookingTool.create({
+      data: { name },
     });
     toolsMap[name] = tool.id;
   }
 
-  // 2. 상품 데이터 생성
+  // 3. 상품 데이터 생성
   const productsData = [
     { name: '1인분 부대찌개 밀키트', price: 12000, category: '밀키트', toolNames: ['1구 인덕션', '전자레인지'] },
     { name: '에어프라이어용 치킨 가라아게 300g', price: 9900, category: '소용량 식자재', toolNames: ['에어프라이어'] },
@@ -66,17 +64,15 @@ async function main() {
     }
   }
 
-  // 3. 신규 추천 레시피 생성 (등심 스테이크 & 바질 페스토 파스타 조합)
+  // 4. 추천 레시피 생성 (등심 스테이크 & 바질 페스토 파스타)
   const recipe = await prisma.recipe.create({
     data: {
-      title: '근사한 1인 근사한 스테이크 & 파스타 세트',
+      title: '근사한 1인 스테이크 & 파스타 세트',
       description: '1구 인덕션으로 즐기는 육즙 가득 등심 스테이크와 풍미 가득 바질 페스토 파스타 모둠 세트',
     },
   });
 
-  // 레시피 상품 연결 (1인용 등심 스테이크 180g + 바질 페스토 파스타 밀키트)
   const targetProducts = ['1인용 등심 스테이크 180g', '바질 페스토 파스타 밀키트'];
-
   for (const productName of targetProducts) {
     if (productsByName[productName]) {
       await prisma.recipeItem.create({
@@ -88,7 +84,7 @@ async function main() {
     }
   }
 
-  console.log('🎉 추천 레시피 품목(스테이크 & 파스타) 변경 및 시드 데이터 생성이 완료되었습니다!');
+  console.log('🎉 추천 레시피(스테이크 & 파스타) 및 데이터 생성이 완료되었습니다!');
 }
 
 main()

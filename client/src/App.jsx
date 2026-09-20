@@ -54,15 +54,23 @@ function App() {
   // 기본 상품/기구/레시피 로드
   const fetchInitialData = async () => {
     try {
-      const [prodRes, toolRes, recipeRes] = await Promise.all([
+      const [prodRes, toolRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/products`),
         axios.get(`${API_BASE_URL}/api/tools`),
-        axios.get(`${API_BASE_URL}/api/recipes`).catch(() => ({ data: { success: false } })),
       ]);
 
       if (prodRes.data.success) setProducts(prodRes.data.data);
       if (toolRes.data.success) setCookingTools(toolRes.data.data);
-      if (recipeRes.data && recipeRes.data.success) setRecipes(recipeRes.data.data);
+
+      // 레시피 데이터는 별도로 처리하여 실패 시에도 앱 동작에 영향이 없도록 보호
+      try {
+        const recipeRes = await axios.get(`${API_BASE_URL}/api/recipes`);
+        if (recipeRes.data && recipeRes.data.success) {
+          setRecipes(recipeRes.data.data);
+        }
+      } catch (recipeErr) {
+        console.warn('레시피 로드 실패:', recipeErr);
+      }
     } catch (err) {
       console.error('기본 데이터 로드 실패:', err);
     }

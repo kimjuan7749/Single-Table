@@ -255,14 +255,33 @@ app.get('/api/recipes', async (req, res) => {
   try {
     const recipes = await prisma.recipe.findMany({
       include: {
-        items: {
-          include: { product: true },
+        recipeItems: {
+          include: {
+            product: {
+              include: {
+                productTools: {
+                  include: {
+                    cookingTool: true,
+                  },
+                },
+              },
+            },
+          },
         },
       },
     });
-    res.json({ success: true, data: recipes });
+
+    return res.json({
+      success: true,
+      data: recipes,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: '레시피 조회 오류' });
+    console.error('레시피 조회 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '레시피 목록을 불러오는 중 오류가 발생했습니다.',
+      error: error.message,
+    });
   }
 });
 

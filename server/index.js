@@ -254,34 +254,20 @@ app.delete('/api/cart/:id', async (req, res) => {
 app.get('/api/recipes', async (req, res) => {
   try {
     const recipes = await prisma.recipe.findMany({
+      take: 1, // ⭐️ 최신 1개만 가져오기
+      orderBy: { id: 'desc' },
       include: {
         recipeItems: {
           include: {
-            product: {
-              include: {
-                productTools: {
-                  include: {
-                    cookingTool: true,
-                  },
-                },
-              },
-            },
+            product: true,
           },
         },
       },
     });
 
-    return res.json({
-      success: true,
-      data: recipes,
-    });
+    res.json({ success: true, data: recipes });
   } catch (error) {
-    console.error('레시피 조회 오류:', error);
-    return res.status(500).json({
-      success: false,
-      message: '레시피 목록을 불러오는 중 오류가 발생했습니다.',
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: '레시피 조회 실패' });
   }
 });
 

@@ -1,48 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Utensils, AlertTriangle, CheckCircle, ShoppingBag, X, User, LogOut, Plus, Minus, Trash2, ChefHat } from 'lucide-react';
+import { ShoppingCart, User, LogOut, Search, Check, Utensils, Sparkles } from 'lucide-react';
 
-// Render production 백엔드 URL
 const API_BASE_URL = 'https://single-table.onrender.com';
 
 function App() {
-  const [tools, setTools] = useState([]);
   const [products, setProducts] = useState([]);
+  const [cookingTools, setCookingTools] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [selectedTools, setSelectedTools] = useState([]);
+  const [user, setUser] = useState(null);
   const [cartItems, setCartItems] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  // 회원 인증 상태
-  const [user, setUser] = useState(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login');
-  const [formData, setFormData] = useState({ email: '', password: '', name: '' });
-  const [authError, setAuthError] = useState('');
-  
-  const [cookingTools, setCookingTools] = useState([]);
-
-  useEffect(() => {
-    fetchTools();
-    fetchProducts();
-    fetchRecipes();
-    fetchCart();
-    checkLoginStatus();
-  }, []);
-
-  useEffect(() => {
-    if (selectedTools.length === 0) {
-      fetchProducts();
-    } else {
-      fetchFilteredProducts();
-    }
-  }, [selectedTools]);
-
-  // 1. 초기 데이터 불러오기 및 로그인 상태 체크
   useEffect(() => {
     const init = async () => {
       await fetchInitialData();
-      
       const token = localStorage.getItem('token');
       if (token) {
         await checkLoginStatus(token);
@@ -50,55 +26,44 @@ function App() {
     };
     init();
   }, []);
-  
-  // 기본 상품/기구/레시피 로드
+
   const fetchInitialData = async () => {
     try {
       const [prodRes, toolRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/products`),
         axios.get(`${API_BASE_URL}/api/tools`),
       ]);
-
       if (prodRes.data.success) setProducts(prodRes.data.data);
       if (toolRes.data.success) setCookingTools(toolRes.data.data);
 
-      // 레시피 데이터는 별도로 처리하여 실패 시에도 앱 동작에 영향이 없도록 보호
       try {
         const recipeRes = await axios.get(`${API_BASE_URL}/api/recipes`);
         if (recipeRes.data && recipeRes.data.success) {
           setRecipes(recipeRes.data.data);
         }
-      } catch (recipeErr) {
-        console.warn('레시피 로드 실패:', recipeErr);
+      } catch (e) {
+        console.warn('레시피 로드 안됨:', e);
       }
     } catch (err) {
-      console.error('기본 데이터 로드 실패:', err);
+      console.error('초기 데이터 로드 실패:', err);
     }
   };
 
-  // 로그인 상태 확인 & DB 저장된 사용자의 보유 기구 불러오기
-  const checkLoginStatus = async (authToken) => {
+  const checkLoginStatus = async (token) => {
     try {
-      const token = authToken || localStorage.getItem('token');
-      if (!token) return;
-
       const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       if (res.data.success) {
         setUser(res.data.data);
-        // DB에서 사용자 보유 기구 목록 조회
         fetchUserTools(token);
       }
     } catch (err) {
-      console.error('로그인 세션 만료:', err);
       localStorage.removeItem('token');
       setUser(null);
     }
   };
 
-  // DB 사용자 보유 기구 조회
   const fetchUserTools = async (token) => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/user/tools`, {
@@ -111,43 +76,9 @@ function App() {
       console.error('보유 기구 조회 실패:', err);
     }
   };
-  
-  // 로그인 성공 처리 함수
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
-        email,
-        password,
-      });
 
-      if (res.data.success) {
-        const token = res.data.token;
-        
-        // 1. 토큰 저장 및 유저 상태 업데이트
-        localStorage.setItem('token', token);
-        setUser(res.data.user);
-        
-        // 2. ⭐️ [핵심] 재로그인 시 DB에 저장된 보유 조리 기구 목록 로드
-        await fetchUserTools(token);
-
-        // 모달 닫기 및 입력 폼 초기화
-        setIsLoginOpen(false);
-        setEmail('');
-        setPassword('');
-        alert('로그인되었습니다.');
-      }
-    } catch (err) {
-      console.error('로그인 실패:', err);
-      alert('로그인 정보가 올바르지 않습니다.');
-    }
-  };
-
-  // 조리 기구 클릭 토글 및 DB 동기화
   const toggleTool = async (toolId) => {
     const token = localStorage.getItem('token');
-
-    // UI 상태 즉시 반영
     const isSelected = selectedTools.includes(toolId);
     const nextTools = isSelected
       ? selectedTools.filter((id) => id !== toolId)
@@ -155,244 +86,129 @@ function App() {
 
     setSelectedTools(nextTools);
 
-    // 로그인된 사용자는 DB에 저장/삭제 요청
     if (token) {
       try {
-        const res = await axios.post(
+        await axios.post(
           `${API_BASE_URL}/api/user/tools/toggle`,
           { toolId },
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        if (!res.data.success) {
-          // 실패 시 원복
-          setSelectedTools(selectedTools);
-        }
       } catch (err) {
         console.error('보유 기구 DB 저장 에러:', err);
       }
     }
   };
 
-  const fetchTools = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/tools`);
-      if (res.data.success) setTools(res.data.data);
-    } catch (err) {
-      console.error('조리 기구 로드 오류:', err);
-    }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/products`);
-      if (res.data.success) {
-        setProducts(res.data.data.map((p) => ({ ...p, isCookable: true })));
-      }
-    } catch (err) {
-      console.error('상품 목록 로드 오류:', err);
-    }
-  };
-
-  const fetchFilteredProducts = async () => {
-    try {
-      const toolIds = selectedTools.join(',');
-      const res = await axios.get(`${API_BASE_URL}/api/products/filter?tools=${toolIds}`);
-      if (res.data.success) setProducts(res.data.data);
-    } catch (err) {
-      console.error('필터링 로드 오류:', err);
-    }
-  };
-
-  const fetchRecipes = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/recipes`);
-      if (res.data.success) setRecipes(res.data.data);
-    } catch (err) {
-      console.error('레시피 로드 오류:', err);
-    }
-  };
-
-  const fetchCart = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/cart`);
-      if (res.data.success) setCartItems(res.data.data);
-    } catch (err) {
-      console.error('장바구니 로드 오류:', err);
-    }
-  };
-
-  const addToCart = async (productId) => {
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/cart`, { productId, quantity: 1 });
-      if (res.data.success) {
-        fetchCart();
-        setIsCartOpen(true);
-      }
-    } catch (err) {
-      console.error('장바구니 담기 오류:', err);
-    }
-  };
-
-  // 수량 조절 API 연동 (PATCH)
-  const updateQuantity = async (cartId, currentQuantity, change) => {
-    const newQuantity = currentQuantity + change;
-    if (newQuantity < 1) return;
-    try {
-      const res = await axios.patch(`${API_BASE_URL}/api/cart/${cartId}`, { quantity: newQuantity });
-      if (res.data.success) fetchCart();
-    } catch (err) {
-      console.error('수량 변경 에러:', err);
-    }
-  };
-
-  // 삭제 API 연동 (DELETE)
-  const removeCartItem = async (cartId) => {
-    try {
-      const res = await axios.delete(`${API_BASE_URL}/api/cart/${cartId}`);
-      if (res.data.success) fetchCart();
-    } catch (err) {
-      console.error('삭제 에러:', err);
-    }
-  };
-
-  // 레시피 원클릭 장바구니 담기 연동 (POST)
-  const addRecipeToCart = async (recipeId) => {
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/cart/recipe`, { recipeId });
-      if (res.data.success) {
-        fetchCart();
-        setIsCartOpen(true);
-      }
-    } catch (err) {
-      console.error('레시피 담기 오류:', err);
-    }
-  };
-
-  const handleAuthSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setAuthError('');
-    const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
     try {
-      const res = await axios.post(`${API_BASE_URL}${endpoint}`, formData);
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, { email, password });
       if (res.data.success) {
-        if (authMode === 'login') {
-          localStorage.setItem('token', res.data.token);
-          setUser(res.data.user);
-          setIsAuthModalOpen(false);
-          setFormData({ email: '', password: '', name: '' });
-        } else {
-          alert('회원가입이 완료되었습니다!');
-          setAuthMode('login');
-        }
+        const token = res.data.token;
+        localStorage.setItem('token', token);
+        setUser(res.data.user);
+        await fetchUserTools(token);
+        setIsLoginModalOpen(false);
+        setEmail('');
+        setPassword('');
       }
     } catch (err) {
-      setAuthError(err.response?.data?.message || '오류가 발생했습니다.');
+      alert('로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.');
     }
   };
 
-  
-  // App.jsx 내 함수 추가
-  const handlePayment = () => {
-    if (cartItems.length === 0) {
-      alert('장바구니가 비어 있습니다.');
-      return;
-    }
-
-    // 발급받으신 토스페이먼츠 테스트 클라이언트 키 입력
-    const clientKey = 'test_ck_PBal2vxj81yAz2PaDK9185RQgOAN';
-
-    if (!window.TossPayments) {
-      alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
-      return;
-    }
-
-    try {
-      const tossPayments = window.TossPayments(clientKey);
-
-      // 대표 상품명 생성 (특수문자 제거 및 100자 이하 처리)
-      const orderTitle =
-        cartItems.length === 1
-          ? cartItems[0].product.name
-          : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
-
-      // 고유 주문번호 생성 (영문, 숫자, -, _ 만 사용하여 6자 이상)
-      const orderId = `ORDER_${Date.now()}`;
-
-      // 결제 금액 (숫자 타입)
-      const amount = Number(totalPrice);
-
-      // 토스페이먼츠 결제창 호출
-      tossPayments.requestPayment('카드', {
-        amount: amount,
-        orderId: orderId,
-        orderName: orderTitle,
-        customerName: user && user.name ? user.name : '구매자',
-        successUrl: `${window.location.origin}/payment/success`,
-        failUrl: `${window.location.origin}/payment/fail`,
-      }).catch((error) => {
-        if (error.code === 'USER_CANCEL') {
-          alert('결제가 취소되었습니다.');
-        } else {
-          console.error('토스 결제 오류 상세:', error);
-          alert(`결제 오류: ${error.message || '처리 중 오류가 발생했습니다.'}`);
-        }
-      });
-    } catch (err) {
-      console.error('TossPayments 초기화 오류:', err);
-      alert('결제 창을 불러오는 중 오류가 발생했습니다.');
-    }
-  };
-  
-  // 로그아웃 시 보유 기구 선택 해제
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
-    setSelectedTools([]); // 보유 기구 선택 상태 초기화
-    alert('로그아웃되었습니다.');
+    setSelectedTools([]);
   };
-  
-  const totalPrice = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+
+  const addToCart = (product) => {
+    setCartItems((prev) => {
+      const existing = prev.find((item) => item.product.id === product.id);
+      if (existing) {
+        return prev.map((item) =>
+          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const handleAddRecipeToCart = (recipe) => {
+    if (!recipe || !recipe.recipeItems) return;
+    recipe.recipeItems.forEach((item) => {
+      if (item.product) {
+        addToCart(item.product);
+      }
+    });
+  };
+
+  // 선택된 조리 기구 기반 필터링
+  const filteredProducts = products.filter((prod) => {
+    if (selectedTools.length === 0) return true;
+    if (!prod.productTools || prod.productTools.length === 0) return true;
+    return prod.productTools.some((pt) => selectedTools.includes(pt.cookingToolId));
+  });
+
+  const totalPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
-      {/* 헤더 */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-              ST
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">Single Table</h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-700">{user.name} 님</span>
-                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-600 transition-colors">
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthMode('login');
-                  setIsAuthModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors"
-              >
-                <User className="w-4 h-4" />
+    <div className="min-h-screen bg-[#f7f7f7] text-[#333333] font-sans">
+      {/* 마켓컬리 스타일 최상단 가입/로그인 바 */}
+      <div className="bg-white border-b border-gray-100 text-xs text-gray-600">
+        <div className="max-w-6xl mx-auto px-4 h-9 flex justify-end items-center gap-4">
+          {user ? (
+            <>
+              <span className="font-semibold text-[#5f0080]">{user.name} 님</span>
+              <button onClick={handleLogout} className="hover:text-black flex items-center gap-1">
+                <LogOut className="w-3.5 h-3.5" /> 로그아웃
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setIsLoginModalOpen(true)} className="text-[#5f0080] font-medium hover:underline">
                 로그인
               </button>
-            )}
+              <span className="text-gray-300">|</span>
+              <button onClick={() => setIsLoginModalOpen(true)} className="hover:underline">
+                회원가입
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
+      {/* 헤더 (컬리 로고, 검색창, 장바구니) */}
+      <header className="bg-white sticky top-0 z-30 border-b border-gray-200 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
+          {/* 컬리 브랜드 메인 로고 */}
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black tracking-tight text-[#5f0080] cursor-pointer" onClick={() => window.location.reload()}>
+              Single Table <span className="text-xs text-[#5f0080] font-normal border border-[#5f0080] px-1.5 py-0.5 rounded-full ml-1">컬리 쿡</span>
+            </h1>
+          </div>
+
+          {/* 검색 바 */}
+          <div className="relative w-96 hidden md:block">
+            <input
+              type="text"
+              placeholder="보유 기구 맞춤 밀키트를 검색해 보세요"
+              className="w-full bg-gray-100 rounded-full py-2.5 pl-5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f0080] border border-transparent focus:bg-white transition-all"
+            />
+            <Search className="w-5 h-5 text-[#5f0080] absolute right-3.5 top-2.5 cursor-pointer" />
+          </div>
+
+          {/* 우측 아이콘 */}
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors"
+              className="relative p-2 text-gray-700 hover:text-[#5f0080] transition-colors"
             >
-              <ShoppingBag className="w-6 h-6" />
+              <ShoppingCart className="w-7 h-7 text-[#5f0080]" />
               {cartItems.length > 0 && (
-                <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                <span className="absolute top-0 right-0 bg-[#5f0080] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white">
                   {cartItems.length}
                 </span>
               )}
@@ -401,250 +217,160 @@ function App() {
         </div>
       </header>
 
-      {/* 메인 콘텐츠 */}
-      <main className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8">
-        {/* 사이드바 */}
-        <aside className="w-full md:w-64 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
-          <h2 className="text-lg font-bold text-gray-900 mb-1">나의 조리 기구</h2>
-          <p className="text-xs text-gray-500 mb-4">보유 중인 기구를 선택해 보세요.</p>
-          <div className="space-y-2">
-            {tools.map((tool) => {
-              const isSelected = selectedTools.includes(tool.id);
-              return (
-                <button
-                  key={tool.id}
-                  onClick={() => toggleTool(tool.id)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg border text-sm font-medium transition-all ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Utensils className="w-4 h-4" />
-                    <span>{tool.name}</span>
-                  </div>
-                  {isSelected && <CheckCircle className="w-4 h-4 text-blue-600" />}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        {/* 메인 영역 */}
-        <section className="flex-1">
-          {/* 레시피 추천 및 원클릭 장바구니 영역 */}
-          {recipes.map((recipe) => (
-            <div key={recipe.id} className="bg-gradient-to-r from-orange-500 to-amber-500 text-white p-6 rounded-2xl mb-8 shadow-md">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <span className="bg-white/20 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center w-fit gap-1">
-                    <ChefHat className="w-3.5 h-3.5" /> 오늘의 추천 레시피
-                  </span>
-                  <h3 className="text-xl font-bold mt-2">{recipe.title}</h3>
-                  <p className="text-sm opacity-90 mt-1">{recipe.description}</p>
-                </div>
-                <button
-                  onClick={() => addRecipeToCart(recipe.id)}
-                  className="bg-white text-orange-600 font-bold px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-colors shadow-sm flex items-center justify-center gap-2 shrink-0"
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                  재료 한 번에 담기
-                </button>
+      {/* 메인 레이아웃 */}
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* 마켓컬리 스타일 추천 레시피 배너 (1개만 표시) */}
+        {recipes.length > 0 && (
+          <section className="mb-10 bg-gradient-to-r from-[#f7f2f9] to-[#ebdcf2] border border-[#e2d0ec] rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 bg-[#5f0080] text-white text-xs px-3 py-1 rounded-full font-semibold">
+                <Sparkles className="w-3.5 h-3.5" /> 오늘의 1인 전용 컬리 레시피
               </div>
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{recipes[0].title}</h2>
+              <p className="text-sm text-gray-600 max-w-xl">{recipes[0].description}</p>
             </div>
-          ))}
+            <button
+              onClick={() => handleAddRecipeToCart(recipes[0])}
+              className="bg-[#5f0080] hover:bg-[#4a0064] text-white font-semibold px-6 py-3.5 rounded-xl text-sm shadow-md transition-all shrink-0 flex items-center gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" /> 세트 재료 한 번에 담기
+            </button>
+          </section>
+        )}
 
-          {/* 상품 목록 */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-900">소용량 식자재 목록</h2>
-            <span className="text-sm text-gray-500">총 {products.length}개 상품</span>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* 좌측: 마켓컬리 스타일 조리 기구 필터 */}
+          <aside className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-fit sticky top-24">
+            <div className="flex items-center gap-2 pb-4 mb-4 border-b border-gray-100">
+              <Utensils className="w-5 h-5 text-[#5f0080]" />
+              <h3 className="font-bold text-gray-900 text-base">나의 보유 조리 기구</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              집에 가지고 계신 기구를 선택하시면 요리 가능한 상품만 맞춤 추천해 드립니다.
+            </p>
+            <div className="space-y-2">
+              {cookingTools.map((tool) => {
+                const isSelected = selectedTools.includes(tool.id);
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => toggleTool(tool.id)}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-sm font-medium transition-all ${
+                      isSelected
+                        ? 'border-[#5f0080] bg-[#f7f2f9] text-[#5f0080] font-bold shadow-sm'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>{tool.name}</span>
+                    {isSelected && <Check className="w-4 h-4 text-[#5f0080]" />}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => {
-              const isCookable = product.isCookable;
-              return (
-                <div
-                  key={product.id}
-                  className={`bg-white rounded-xl border overflow-hidden shadow-sm transition-all relative flex flex-col justify-between ${
-                    !isCookable ? 'opacity-60 border-red-200' : 'border-gray-200 hover:shadow-md'
-                  }`}
-                >
-                  <div>
-                    {!isCookable && (
-                      <div className="absolute top-3 left-3 z-10 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        조리 기구 부족
-                      </div>
-                    )}
-                    <div className="h-40 bg-gray-100 flex items-center justify-center text-gray-400 font-medium p-4 text-center">
-                      {product.name}
-                    </div>
-                    <div className="p-4">
-                      <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                        {product.category}
-                      </span>
-                      <h3 className="font-bold text-gray-900 mt-2 text-base line-clamp-1">{product.name}</h3>
-                      <p className="text-lg font-extrabold text-gray-900 mt-1">
-                        {product.price.toLocaleString()}원
-                      </p>
-                    </div>
-                  </div>
+          {/* 우측: 컬리 스타일 상품 메인 그리드 */}
+          <section className="lg:col-span-3">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                1인 가구 추천 식자재 <span className="text-xs text-gray-500 font-normal ml-2">총 {filteredProducts.length}개</span>
+              </h3>
+            </div>
 
-                  <div className="p-4 pt-0">
-                    <button
-                      onClick={() => addToCart(product.id)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      장바구니 담기
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      </main>
-
-      {/* 장바구니 패널 */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col p-6 justify-between">
-            <div>
-              <div className="flex items-center justify-between border-b pb-4 mb-4">
-                <h3 className="text-lg font-bold text-gray-900">장바구니</h3>
-                <button onClick={() => setIsCartOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
-                  <X className="w-6 h-6" />
-                </button>
+            {filteredProducts.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-500">
+                선택하신 조리 기구로 조리 가능한 상품이 없습니다.
               </div>
-
-              {cartItems.length === 0 ? (
-                <p className="text-center text-gray-500 py-12">장바구니가 비어 있습니다.</p>
-              ) : (
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                      <div className="flex-1 pr-2">
-                        <p className="font-semibold text-sm text-gray-900">{item.product.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {item.product.price.toLocaleString()}원
-                        </p>
-
-                        <div className="flex items-center gap-2 mt-2">
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity, -1)}
-                            className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-100 text-gray-600"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="text-xs font-bold text-gray-800 w-4 text-center">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity, 1)}
-                            className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-100 text-gray-600"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <button
-                          onClick={() => removeCartItem(item.id)}
-                          className="text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <span className="font-bold text-sm text-blue-600">
-                          {(item.product.price * item.quantity).toLocaleString()}원
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group"
+                  >
+                    <div>
+                      {/* 상품 썸네일 영역 */}
+                      <div className="h-44 bg-gray-100 flex items-center justify-center text-gray-400 group-hover:scale-105 transition-transform duration-300 relative overflow-hidden">
+                        <span className="font-semibold text-gray-400">{product.name}</span>
+                        <span className="absolute top-3 left-3 bg-white/90 text-[#5f0080] text-[10px] font-bold px-2 py-0.5 rounded border border-[#5f0080]/20">
+                          {product.category}
                         </span>
                       </div>
+
+                      {/* 상품 정보 */}
+                      <div className="p-4 space-y-2">
+                        <h4 className="text-sm font-medium text-gray-800 line-clamp-2 leading-snug">
+                          {product.name}
+                        </h4>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-base font-extrabold text-gray-900">
+                            {product.price.toLocaleString()}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-900">원</span>
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-600 font-medium">총 결제 금액</span>
-                <span className="text-xl font-extrabold text-gray-900">{totalPrice.toLocaleString()}원</span>
+                    {/* 장바구니 담기 버튼 */}
+                    <div className="p-4 pt-0">
+                      <button
+                        onClick={() => addToCart(product)}
+                        className="w-full bg-[#f7f2f9] hover:bg-[#5f0080] text-[#5f0080] hover:text-white font-semibold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" /> 담기
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <button
-                onClick={handlePayment}
-                disabled={cartItems.length === 0}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition-colors"
-              >
-                {totalPrice.toLocaleString()}원 주문하기
-              </button>
-            </div>
-          </div>
+            )}
+          </section>
         </div>
-      )}
+      </main>
 
-      {/* 로그인/회원가입 모달 */}
-      {isAuthModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl relative">
-            <button onClick={() => setIsAuthModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-xl font-bold text-gray-900 text-center mb-6">
-              {authMode === 'login' ? '로그인' : '회원가입'}
+      {/* 로그인 모달 */}
+      {isLoginModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl relative">
+            <h3 className="text-xl font-bold text-center text-gray-900 mb-6">
+              <span className="text-[#5f0080]">Single Table</span> 로그인
             </h3>
-            {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded-lg font-medium">{authError}</div>}
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              {authMode === 'register' && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">이름</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                    placeholder="홍길동"
-                  />
-                </div>
-              )}
+            <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">이메일</label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">이메일</label>
                 <input
                   type="email"
                   required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="example@singletable.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="example@email.com"
+                  className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:outline-none focus:border-[#5f0080]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">비밀번호</label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">비밀번호</label>
                 <input
                   type="password"
                   required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="비밀번호 입력"
+                  className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:outline-none focus:border-[#5f0080]"
                 />
               </div>
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition-colors mt-2">
-                {authMode === 'login' ? '로그인' : '가입하기'}
+              <button
+                type="submit"
+                className="w-full bg-[#5f0080] hover:bg-[#4a0064] text-white font-bold py-3 rounded-xl transition-colors text-sm mt-2"
+              >
+                로그인
               </button>
             </form>
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => {
-                  setAuthError('');
-                  setAuthMode(authMode === 'login' ? 'register' : 'login');
-                }}
-                className="text-xs text-blue-600 font-semibold hover:underline"
-              >
-                {authMode === 'login' ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
-              </button>
-            </div>
+            <button
+              onClick={() => setIsLoginModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-sm"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}

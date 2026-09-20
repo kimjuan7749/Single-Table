@@ -231,18 +231,8 @@ function App() {
           {/* 컬리 브랜드 메인 로고 */}
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black tracking-tight text-[#5f0080] cursor-pointer" onClick={() => window.location.reload()}>
-              Single Table <span className="text-xs text-[#5f0080] font-normal border border-[#5f0080] px-1.5 py-0.5 rounded-full ml-1">컬리 쿡</span>
+              Single Table <span className="text-xs text-[#5f0080] font-normal border border-[#5f0080] px-1.5 py-0.5 rounded-full ml-1">싱글 테이블</span>
             </h1>
-          </div>
-
-          {/* 검색 바 */}
-          <div className="relative w-96 hidden md:block">
-            <input
-              type="text"
-              placeholder="보유 기구 맞춤 밀키트를 검색해 보세요"
-              className="w-full bg-gray-100 rounded-full py-2.5 pl-5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f0080] border border-transparent focus:bg-white transition-all"
-            />
-            <Search className="w-5 h-5 text-[#5f0080] absolute right-3.5 top-2.5 cursor-pointer" />
           </div>
 
           {/* 우측 아이콘 */}
@@ -269,7 +259,7 @@ function App() {
           <section className="mb-10 bg-gradient-to-r from-[#f7f2f9] to-[#ebdcf2] border border-[#e2d0ec] rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-1.5 bg-[#5f0080] text-white text-xs px-3 py-1 rounded-full font-semibold">
-                <Sparkles className="w-3.5 h-3.5" /> 오늘의 1인 전용 컬리 레시피
+                <Sparkles className="w-3.5 h-3.5" /> 오늘의 1인 전용 레시피
               </div>
               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{recipes[0].title}</h2>
               <p className="text-sm text-gray-600 max-w-xl">{recipes[0].description}</p>

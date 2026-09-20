@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 테스트 데이터 초기화 및 생성을 시작합니다...');
 
-  // 1. 기존 데이터 완전 초기화 (참조 관계 순서대로 삭제)
+  // 1. 기존 데이터 초기화 (참조 관계 순서대로 안전 삭제)
   await prisma.userTool.deleteMany({});
   await prisma.cart.deleteMany({});
   await prisma.recipeItem.deleteMany({});
@@ -13,18 +13,22 @@ async function main() {
   await prisma.product.deleteMany({});
   await prisma.cookingTool.deleteMany({});
 
-  // 2. 조리 기구 생성 및 Map 객체로 ID 저장
+  // 2. 조리 기구 목록 일괄 생성 (skipDuplicates로 중복 안전 처리)
   const toolNames = ['1구 인덕션', '에어프라이어', '전자레인지', '오븐', '가스레인지'];
+  
+  await prisma.cookingTool.createMany({
+    data: toolNames.map((name) => ({ name })),
+    skipDuplicates: true,
+  });
+
+  // DB에 저장된 전체 조리 기구 목록 조회하여 Map 객체 생성
+  const allTools = await prisma.cookingTool.findMany();
   const toolsMap = {};
+  allTools.forEach((t) => {
+    toolsMap[t.name] = t.id;
+  });
 
-  for (const name of toolNames) {
-    const tool = await prisma.cookingTool.create({
-      data: { name },
-    });
-    toolsMap[name] = tool.id;
-  }
-
-  // 3. 상품 데이터 생성
+  // 3. 상품 데이터 정의
   const productsData = [
     { name: '1인분 부대찌개 밀키트', price: 12000, category: '밀키트', toolNames: ['1구 인덕션', '전자레인지'] },
     { name: '에어프라이어용 치킨 가라아게 300g', price: 9900, category: '소용량 식자재', toolNames: ['에어프라이어'] },
@@ -51,7 +55,7 @@ async function main() {
     });
     productsByName[prod.name] = product;
 
-    // 상품-조리기구 연관 매핑
+    // 상품-조리기구 연관 관계 생성
     for (const tName of prod.toolNames) {
       if (toolsMap[tName]) {
         await prisma.productTool.create({
@@ -64,7 +68,7 @@ async function main() {
     }
   }
 
-  // 4. 추천 레시피 생성 (등심 스테이크 & 바질 페스토 파스타)
+  // 4. 추천 레시피 생성 (1인용 등심 스테이크 & 바질 페스토 파스타 세트)
   const recipe = await prisma.recipe.create({
     data: {
       title: '근사한 1인 스테이크 & 파스타 세트',
@@ -84,7 +88,7 @@ async function main() {
     }
   }
 
-  console.log('🎉 추천 레시피(스테이크 & 파스타) 및 데이터 생성이 완료되었습니다!');
+  console.log('🎉 추천 레시피(스테이크 & 파스타) 및 데이터 생성이 성공적으로 완료되었습니다!');
 }
 
 main()

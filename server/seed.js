@@ -26,7 +26,7 @@ async function main() {
     toolsMap[name] = tool.id;
   }
 
-  // 2. 상품 데이터 및 매핑 조리 기구 정의
+  // 2. 상품 데이터 생성
   const productsData = [
     { name: '1인분 부대찌개 밀키트', price: 12000, category: '밀키트', toolNames: ['1구 인덕션', '전자레인지'] },
     { name: '에어프라이어용 치킨 가라아게 300g', price: 9900, category: '소용량 식자재', toolNames: ['에어프라이어'] },
@@ -42,7 +42,7 @@ async function main() {
     { name: '전자레인지용 간편 계란찜 세트', price: 4200, category: '소용량 식자재', toolNames: ['전자레인지'] },
   ];
 
-  const createdProducts = [];
+  const productsByName = {};
   for (const prod of productsData) {
     const product = await prisma.product.create({
       data: {
@@ -51,7 +51,7 @@ async function main() {
         category: prod.category,
       },
     });
-    createdProducts.push(product);
+    productsByName[prod.name] = product;
 
     // 상품-조리기구 연관 매핑
     for (const tName of prod.toolNames) {
@@ -66,24 +66,29 @@ async function main() {
     }
   }
 
-  // 3. 추천 레시피 생성
+  // 3. 신규 추천 레시피 생성 (등심 스테이크 & 바질 페스토 파스타 조합)
   const recipe = await prisma.recipe.create({
     data: {
-      title: '초간단 1인분 부대찌개 모둠',
-      description: '1구 인덕션과 전자레인지로 10분 만에 완성하는 얼큰한 부대찌개 모둠 세트',
+      title: '근사한 1인 근사한 스테이크 & 파스타 세트',
+      description: '1구 인덕션으로 즐기는 육즙 가득 등심 스테이크와 풍미 가득 바질 페스토 파스타 모둠 세트',
     },
   });
 
-  if (createdProducts.length > 0) {
-    await prisma.recipeItem.create({
-      data: {
-        recipeId: recipe.id,
-        productId: createdProducts[0].id,
-      },
-    });
+  // 레시피 상품 연결 (1인용 등심 스테이크 180g + 바질 페스토 파스타 밀키트)
+  const targetProducts = ['1인용 등심 스테이크 180g', '바질 페스토 파스타 밀키트'];
+
+  for (const productName of targetProducts) {
+    if (productsByName[productName]) {
+      await prisma.recipeItem.create({
+        data: {
+          recipeId: recipe.id,
+          productId: productsByName[productName].id,
+        },
+      });
+    }
   }
 
-  console.log('🎉 총 12개의 식자재 및 밀키트 더미 데이터 입력이 성공적으로 완료되었습니다!');
+  console.log('🎉 추천 레시피 품목(스테이크 & 파스타) 변경 및 시드 데이터 생성이 완료되었습니다!');
 }
 
 main()

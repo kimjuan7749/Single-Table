@@ -177,13 +177,23 @@ function App() {
     });
   };
 
+  // 한글 문자열을 btoa로 안전하게 인코딩하는 보조 함수
+  const utf8ToBase64 = (str) => {
+    return window.btoa(
+      encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode('0x' + p1);
+      })
+    );
+  };
+
   const handlePayment = async () => {
     if (cartItems.length === 0) {
       alert('장바구니가 비어 있습니다.');
       return;
     }
 
-    const clientKey = 'test_ck_발급받으신_클라이언트_키';
+    // 발급받으신 토스페이먼츠 테스트 클라이언트 키
+    const clientKey = 'test_ck_PBal2vxj81yAz2PaDK9185RQgOAN';
 
     if (!window.TossPayments) {
       alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
@@ -193,6 +203,7 @@ function App() {
     try {
       const tossPayments = window.TossPayments(clientKey);
 
+      // 대표 주문 상품명 생성
       const orderTitle =
         cartItems.length === 1
           ? cartItems[0].product.name
@@ -201,7 +212,7 @@ function App() {
       const orderId = `ORDER_${Date.now()}`;
       const token = localStorage.getItem('token');
 
-      // 로그인한 경우 백엔드 DB에 주문 생성 요청
+      // DB에 주문 정보 미리 저장 (로그인 시)
       if (token) {
         try {
           await axios.post(
@@ -222,6 +233,7 @@ function App() {
         }
       }
 
+      // 토스 결제 창 호출
       tossPayments
         .requestPayment('카드', {
           amount: totalPrice,
@@ -240,6 +252,7 @@ function App() {
         });
     } catch (err) {
       console.error('TossPayments 초기화 오류:', err);
+      alert('결제 모듈을 불러오는 중 오류가 발생했습니다.');
     }
   };
 

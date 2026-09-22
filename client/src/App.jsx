@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, User, LogOut, Search, Check, Utensils, Sparkles } from 'lucide-react';
+import { ShoppingCart, User, LogOut, Search, Check, Utensils, Sparkles, Package, Calendar } from 'lucide-react';
 
 const API_BASE_URL = 'https://single-table.onrender.com';
 
@@ -11,8 +11,13 @@ function App() {
   const [selectedTools, setSelectedTools] = useState([]);
   const [user, setUser] = useState(null);
   const [cartItems, setCartItems] = useState([]);
+  
+  // 모달 상태
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
+  const [orders, setOrders] = useState([]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -77,6 +82,32 @@ function App() {
     }
   };
 
+  // 주문 내역 목록 불러오기
+  const fetchOrderHistory = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success) {
+        setOrders(res.data.data);
+      }
+    } catch (err) {
+      console.error('주문 내역 불러오기 실패:', err);
+    }
+  };
+
+  const openOrderHistory = () => {
+    if (!user) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+    fetchOrderHistory();
+    setIsOrderHistoryOpen(true);
+  };
+
   const toggleTool = async (toolId) => {
     const token = localStorage.getItem('token');
     const isSelected = selectedTools.includes(toolId);
@@ -121,6 +152,7 @@ function App() {
     localStorage.removeItem('token');
     setUser(null);
     setSelectedTools([]);
+    setOrders([]);
   };
 
   const addToCart = (product) => {
@@ -145,23 +177,13 @@ function App() {
     });
   };
 
-  // 선택된 조리 기구 기반 필터링
-  const filteredProducts = products.filter((prod) => {
-    if (selectedTools.length === 0) return true;
-    if (!prod.productTools || prod.productTools.length === 0) return true;
-    return prod.productTools.some((pt) => selectedTools.includes(pt.cookingToolId));
-  });
-
-  const totalPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
-
-  // 토스 결제 호출 함수
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (cartItems.length === 0) {
       alert('장바구니가 비어 있습니다.');
       return;
     }
 
-    const clientKey = 'test_ck_PBal2vxj81yAz2PaDK9185RQgOAN'; // 발급받으신 토스 클라이언트 키
+    const clientKey = 'test_ck_발급받으신_클라이언트_키';
 
     if (!window.TossPayments) {
       alert('토스페이먼츠 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
@@ -177,6 +199,28 @@ function App() {
           : `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`;
 
       const orderId = `ORDER_${Date.now()}`;
+      const token = localStorage.getItem('token');
+
+      // 로그인한 경우 백엔드 DB에 주문 생성 요청
+      if (token) {
+        try {
+          await axios.post(
+            `${API_BASE_URL}/api/orders`,
+            {
+              orderNumber: orderId,
+              totalAmount: totalPrice,
+              items: cartItems.map((item) => ({
+                productId: item.product.id,
+                quantity: item.quantity,
+                price: item.product.price,
+              })),
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch (e) {
+          console.error('DB 주문 저장 오류:', e);
+        }
+      }
 
       tossPayments
         .requestPayment('카드', {
@@ -199,14 +243,27 @@ function App() {
     }
   };
 
+  const filteredProducts = products.filter((prod) => {
+    if (selectedTools.length === 0) return true;
+    if (!prod.productTools || prod.productTools.length === 0) return true;
+    return prod.productTools.some((pt) => selectedTools.includes(pt.cookingToolId));
+  });
+
+  const totalPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+
   return (
     <div className="min-h-screen bg-[#f7f7f7] text-[#333333] font-sans">
-      {/* 마켓컬리 스타일 최상단 가입/로그인 바 */}
+      {/* 마켓컬리 스타일 최상단 가입/로그인 및 주문 내역 바 */}
       <div className="bg-white border-b border-gray-100 text-xs text-gray-600">
         <div className="max-w-6xl mx-auto px-4 h-9 flex justify-end items-center gap-4">
           {user ? (
             <>
               <span className="font-semibold text-[#5f0080]">{user.name} 님</span>
+              <span className="text-gray-300">|</span>
+              <button onClick={openOrderHistory} className="hover:text-[#5f0080] flex items-center gap-1 font-medium">
+                <Package className="w-3.5 h-3.5 text-[#5f0080]" /> 주문 내역
+              </button>
+              <span className="text-gray-300">|</span>
               <button onClick={handleLogout} className="hover:text-black flex items-center gap-1">
                 <LogOut className="w-3.5 h-3.5" /> 로그아웃
               </button>
@@ -225,17 +282,24 @@ function App() {
         </div>
       </div>
 
-      {/* 헤더 (컬리 로고, 검색창, 장바구니) */}
+      {/* 헤더 */}
       <header className="bg-white sticky top-0 z-30 border-b border-gray-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
-          {/* 컬리 브랜드 메인 로고 */}
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black tracking-tight text-[#5f0080] cursor-pointer" onClick={() => window.location.reload()}>
-              Single Table <span className="text-xs text-[#5f0080] font-normal border border-[#5f0080] px-1.5 py-0.5 rounded-full ml-1">싱글 테이블</span>
+              Single Table <span className="text-xs text-[#5f0080] font-normal border border-[#5f0080] px-1.5 py-0.5 rounded-full ml-1">컬리 쿡</span>
             </h1>
           </div>
 
-          {/* 우측 아이콘 */}
+          <div className="relative w-96 hidden md:block">
+            <input
+              type="text"
+              placeholder="보유 기구 맞춤 밀키트를 검색해 보세요"
+              className="w-full bg-gray-100 rounded-full py-2.5 pl-5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f0080] border border-transparent focus:bg-white transition-all"
+            />
+            <Search className="w-5 h-5 text-[#5f0080] absolute right-3.5 top-2.5 cursor-pointer" />
+          </div>
+
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsCartOpen(true)}
@@ -254,12 +318,11 @@ function App() {
 
       {/* 메인 레이아웃 */}
       <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* 마켓컬리 스타일 추천 레시피 배너 (1개만 표시) */}
         {recipes.length > 0 && (
           <section className="mb-10 bg-gradient-to-r from-[#f7f2f9] to-[#ebdcf2] border border-[#e2d0ec] rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-1.5 bg-[#5f0080] text-white text-xs px-3 py-1 rounded-full font-semibold">
-                <Sparkles className="w-3.5 h-3.5" /> 오늘의 1인 전용 레시피
+                <Sparkles className="w-3.5 h-3.5" /> 오늘의 1인 전용 컬리 레시피
               </div>
               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{recipes[0].title}</h2>
               <p className="text-sm text-gray-600 max-w-xl">{recipes[0].description}</p>
@@ -274,7 +337,6 @@ function App() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* 좌측: 마켓컬리 스타일 조리 기구 필터 */}
           <aside className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-fit sticky top-24">
             <div className="flex items-center gap-2 pb-4 mb-4 border-b border-gray-100">
               <Utensils className="w-5 h-5 text-[#5f0080]" />
@@ -304,7 +366,6 @@ function App() {
             </div>
           </aside>
 
-          {/* 우측: 컬리 스타일 상품 메인 그리드 */}
           <section className="lg:col-span-3">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900">
@@ -324,7 +385,6 @@ function App() {
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group"
                   >
                     <div>
-                      {/* 상품 썸네일 영역 */}
                       <div className="h-44 bg-gray-100 flex items-center justify-center text-gray-400 group-hover:scale-105 transition-transform duration-300 relative overflow-hidden">
                         <span className="font-semibold text-gray-400">{product.name}</span>
                         <span className="absolute top-3 left-3 bg-white/90 text-[#5f0080] text-[10px] font-bold px-2 py-0.5 rounded border border-[#5f0080]/20">
@@ -332,7 +392,6 @@ function App() {
                         </span>
                       </div>
 
-                      {/* 상품 정보 */}
                       <div className="p-4 space-y-2">
                         <h4 className="text-sm font-medium text-gray-800 line-clamp-2 leading-snug">
                           {product.name}
@@ -346,7 +405,6 @@ function App() {
                       </div>
                     </div>
 
-                    {/* 장바구니 담기 버튼 */}
                     <div className="p-4 pt-0">
                       <button
                         onClick={() => addToCart(product)}
@@ -362,6 +420,130 @@ function App() {
           </section>
         </div>
       </main>
+
+      {/* 장바구니 슬라이더 */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div
+            className="absolute inset-0 bg-black/50 transition-opacity"
+            onClick={() => setIsCartOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-[#5f0080]" />
+                  <h3 className="font-bold text-gray-900 text-lg">장바구니</h3>
+                </div>
+                <button onClick={() => setIsCartOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-6 flex-1 overflow-y-auto divide-y divide-gray-100">
+                {cartItems.length === 0 ? (
+                  <div className="text-center py-20 text-gray-400 text-sm">
+                    장바구니에 담긴 상품이 없습니다.
+                  </div>
+                ) : (
+                  cartItems.map((item) => (
+                    <div key={item.product.id} className="py-4 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-sm text-gray-800 mb-1">
+                          {item.product.name}
+                        </h4>
+                        <div className="text-xs text-gray-500">
+                          {item.product.price.toLocaleString()}원 × {item.quantity}개
+                        </div>
+                      </div>
+                      <div className="font-bold text-sm text-[#5f0080]">
+                        {(item.product.price * item.quantity).toLocaleString()}원
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {cartItems.length > 0 && (
+                <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
+                  <div className="flex justify-between items-center text-base font-bold">
+                    <span>총 결제 금액</span>
+                    <span className="text-lg text-[#5f0080]">
+                      {totalPrice.toLocaleString()}원
+                    </span>
+                  </div>
+                  <button
+                    onClick={handlePayment}
+                    className="w-full bg-[#5f0080] hover:bg-[#4a0064] text-white font-bold py-3.5 rounded-xl transition-colors text-sm shadow-md"
+                  >
+                    {totalPrice.toLocaleString()}원 결제하기
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 주문 내역 모달 */}
+      {isOrderHistoryOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[80vh] flex flex-col shadow-2xl relative overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-[#f7f2f9]">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-[#5f0080]" />
+                <h3 className="text-lg font-bold text-gray-900">나의 주문 내역</h3>
+              </div>
+              <button
+                onClick={() => setIsOrderHistoryOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {orders.length === 0 ? (
+                <div className="text-center py-16 text-gray-400 text-sm">
+                  주문 내역이 존재하지 않습니다.
+                </div>
+              ) : (
+                orders.map((order) => (
+                  <div key={order.id} className="border border-gray-200 rounded-xl p-5 space-y-3 bg-white shadow-sm">
+                    <div className="flex justify-between items-center border-b border-gray-100 pb-3 text-xs">
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <Calendar className="w-3.5 h-3.5 text-[#5f0080]" />
+                        <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                        <span className="text-gray-300">|</span>
+                        <span className="font-mono">{order.orderNumber}</span>
+                      </div>
+                      <span className="bg-[#f7f2f9] text-[#5f0080] font-bold px-2.5 py-0.5 rounded-full text-[11px]">
+                        {order.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {order.orderItems.map((item) => (
+                        <div key={item.id} className="flex justify-between items-center text-sm">
+                          <span className="text-gray-800 font-medium">{item.product.name}</span>
+                          <span className="text-xs text-gray-500">
+                            {item.price.toLocaleString()}원 × {item.quantity}개
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-100 flex justify-between items-center text-sm font-bold text-gray-900">
+                      <span>결제 금액</span>
+                      <span className="text-[#5f0080]">{order.totalAmount.toLocaleString()}원</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 로그인 모달 */}
       {isLoginModalOpen && (
@@ -406,77 +588,6 @@ function App() {
             >
               ✕
             </button>
-          </div>
-        </div>
-      )}
-    {/* 장바구니 슬라이드 사이드바 */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          {/* 배경 오버레이 */}
-          <div
-            className="absolute inset-0 bg-black/50 transition-opacity"
-            onClick={() => setIsCartOpen(false)}
-          />
-
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
-              {/* 장바구니 헤더 */}
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-[#5f0080]" />
-                  <h3 className="font-bold text-gray-900 text-lg">장바구니</h3>
-                </div>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* 장바구니 아이템 목록 */}
-              <div className="p-6 flex-1 overflow-y-auto divide-y divide-gray-100">
-                {cartItems.length === 0 ? (
-                  <div className="text-center py-20 text-gray-400 text-sm">
-                    장바구니에 담긴 상품이 없습니다.
-                  </div>
-                ) : (
-                  cartItems.map((item) => (
-                    <div key={item.product.id} className="py-4 flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold text-sm text-gray-800 mb-1">
-                          {item.product.name}
-                        </h4>
-                        <div className="text-xs text-gray-500">
-                          {item.product.price.toLocaleString()}원 × {item.quantity}개
-                        </div>
-                      </div>
-                      <div className="font-bold text-sm text-[#5f0080]">
-                        {(item.product.price * item.quantity).toLocaleString()}원
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* 장바구니 하단 결제 버튼 */}
-              {cartItems.length > 0 && (
-                <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
-                  <div className="flex justify-between items-center text-base font-bold">
-                    <span>총 결제 금액</span>
-                    <span className="text-lg text-[#5f0080]">
-                      {totalPrice.toLocaleString()}원
-                    </span>
-                  </div>
-                  <button
-                    onClick={handlePayment}
-                    className="w-full bg-[#5f0080] hover:bg-[#4a0064] text-white font-bold py-3.5 rounded-xl transition-colors text-sm shadow-md"
-                  >
-                    {totalPrice.toLocaleString()}원 결제하기
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}

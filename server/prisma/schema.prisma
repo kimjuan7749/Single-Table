@@ -17,6 +17,7 @@ model User {
   // 역관계 필드 정의 (Cart, UserTool)
   carts     Cart[]
   userTools UserTool[]
+  orders    Order[]
 }
 
 model CookingTool {
@@ -36,7 +37,9 @@ model Product {
   productTools ProductTool[]
   recipeItems  RecipeItem[]
   carts        Cart[]
+  orderItems   OrderItem[]
 }
+
 
 model ProductTool {
   id            Int         @id @default(autoincrement())
@@ -84,4 +87,25 @@ model UserTool {
   cookingTool   CookingTool @relation(fields: [cookingToolId], references: [id], onDelete: Cascade)
 
   @@unique([userId, cookingToolId])
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNumber String      @unique
+  userId      Int
+  totalAmount Int
+  status      String      @default("결제완료")
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }

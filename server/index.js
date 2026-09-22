@@ -466,6 +466,68 @@ app.post('/api/user/tools/toggle', authenticateToken, async (req, res) => {
   }
 });
 
+// 1. 로그인 사용자의 주문 내역 목록 조회 (GET /api/orders)
+app.get('/api/orders', authenticateToken, async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId: req.user.id },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ success: true, data: orders });
+  } catch (error) {
+    console.error('주문 내역 조회 오류:', error);
+    res.status(500).json({ success: false, message: '주문 내역을 불러오는데 실패했습니다.' });
+  }
+});
+
+// 2. 새로운 주문 내역 저장 (POST /api/orders)
+app.post('/api/orders', authenticateToken, async (req, res) => {
+  const { orderNumber, totalAmount, items } = req.body;
+  const userId = req.user.id;
+
+  if (!orderNumber || !totalAmount || !items || items.length === 0) {
+    return res.status(400).json({ success: false, message: '주문 정보가 올바르지 않습니다.' });
+  }
+
+  try {
+    const newOrder = await prisma.order.create({
+      data: {
+        orderNumber,
+        userId,
+        totalAmount: Number(totalAmount),
+        status: '결제완료',
+        orderItems: {
+          create: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+        },
+      },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    res.json({ success: true, data: newOrder });
+  } catch (error) {
+    console.error('주문 저장 오류:', error);
+    res.status(500).json({ success: false, message: '주문 정보 저장에 실패했습니다.' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Single Table 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
 });

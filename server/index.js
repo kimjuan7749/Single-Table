@@ -528,6 +528,116 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// 관리자(Admin) 전용 API 라우트
+// ==========================================
+
+// 1. 관리자 통계 요약 정보 조회 (GET /api/admin/stats)
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const totalUsers = await prisma.user.count();
+    const totalProducts = await prisma.product.count();
+    const totalOrders = await prisma.order.count();
+    const totalSalesAggregate = await prisma.order.aggregate({
+      _sum: { totalAmount: true },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalProducts,
+        totalOrders,
+        totalSales: totalSalesAggregate._sum.totalAmount || 0,
+      },
+    });
+  } catch (error) {
+    console.error('통계 조회 오류:', error);
+    res.status(500).json({ success: false, message: '통계 불러오기 실패' });
+  }
+});
+
+// 2. 전체 주문 목록 조회 (GET /api/admin/orders)
+app.get('/api/admin/orders', async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      include: {
+        user: { select: { name: true, email: true } },
+        orderItems: { include: { product: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: orders });
+  } catch (error) {
+    console.error('관리자 주문 조회 오류:', error);
+    res.status(500).json({ success: false, message: '주문 목록 불러오기 실패' });
+  }
+});
+
+// 3. 주문 상태 업데이트 (PATCH /api/admin/orders/:id/status)
+app.patch('/api/admin/orders/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    const updatedOrder = await prisma.order.update({
+      where: { id: Number(id) },
+      data: { status },
+    });
+    res.json({ success: true, data: updatedOrder });
+  } catch (error) {
+    console.error('주문 상태 변경 오류:', error);
+    res.status(500).json({ success: false, message: '상태 변경 실패' });
+  }
+});
+
+// 4. 신규 상품 등록 (POST /api/admin/products)
+app.post('/api/admin/products', async (req, res) => {
+  const { name, price, category, toolIds } = req.body;
+
+  if (!name || !price || !category) {
+    return res.status(400).json({ success: false, message: '필수 상품 정보가 누락되었습니다.' });
+  }
+
+  try {
+    const product = await prisma.product.create({
+      data: {
+        name,
+        price: Number(price),
+        category,
+        productTools: {
+          create: (toolIds || []).map((toolId) => ({
+            cookingToolId: Number(toolId),
+          })),
+        },
+      },
+      include: {
+        productTools: { include: { cookingTool: true } },
+      },
+    });
+
+    res.json({ success: true, data: product });
+  } catch (error) {
+    console.error('상품 등록 오류:', error);
+    res.status(500).json({ success: false, message: '상품 등록 실패' });
+  }
+});
+
+// 5. 상품 삭제 (DELETE /api/admin/products/:id)
+app.delete('/api/admin/products/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await prisma.product.delete({
+      where: { id: Number(id) },
+    });
+    res.json({ success: true, message: '상품이 삭제되었습니다.' });
+  } catch (error) {
+    console.error('상품 삭제 오류:', error);
+    res.status(500).json({ success: false, message: '상품 삭제 실패' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Single Table 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
 });
